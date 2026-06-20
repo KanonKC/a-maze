@@ -1,0 +1,139 @@
+[gd_scene load_steps=2 format=3 uid="uid://hud001"]
+
+[ext_resource type="Script" path="res://scripts/hud.gd" id="1_hud"]
+
+[node name="HUD" type="CanvasLayer"]
+script = ExtResource("1_hud")
+
+[node name="FlashlightBar" type="ProgressBar" parent="."]
+anchors_preset = 3
+anchor_left = 0.0
+anchor_top = 1.0
+anchor_right = 0.0
+anchor_bottom = 1.0
+offset_left = 20.0
+offset_top = -50.0
+offset_right = 220.0
+offset_bottom = -20.0
+min_value = 0.0
+max_value = 100.0
+value = 100.0
+
+[node name="FlashlightLabel" type="Label" parent="."]
+anchors_preset = 3
+anchor_left = 0.0
+anchor_top = 1.0
+anchor_right = 0.0
+anchor_bottom = 1.0
+offset_left = 20.0
+offset_top = -70.0
+offset_right = 220.0
+offset_bottom = -52.0
+text = "ไฟฉาย [F]"
+
+[node name="ClueLabel" type="Label" parent="."]
+anchors_preset = 1
+anchor_left = 1.0
+anchor_top = 0.0
+anchor_right = 1.0
+anchor_bottom = 0.0
+offset_left = -160.0
+offset_top = 20.0
+offset_right = -20.0
+offset_bottom = 50.0
+text = "เบาะแส: 0/5"
+horizontal_alignment = 2
+
+[node name="ChalkLabel" type="Label" parent="."]
+anchors_preset = 3
+anchor_left = 0.0
+anchor_top = 1.0
+anchor_right = 0.0
+anchor_bottom = 1.0
+offset_left = 20.0
+offset_top = -95.0
+offset_right = 220.0
+offset_bottom = -72.0
+text = ""
+
+[node name="Compass" type="Control" parent="."]
+anchors_preset = 1
+anchor_left = 1.0
+anchor_top = 0.0
+anchor_right = 1.0
+anchor_bottom = 0.0
+offset_left = -90.0
+offset_top = 60.0
+offset_right = -20.0
+offset_bottom = 130.0
+
+[node name="Label" type="Label" parent="Compass"]
+offset_left = 0.0
+offset_top = 0.0
+offset_right = 70.0
+offset_bottom = 14.0
+text = "เข็มทิศ"
+horizontal_alignment = 1
+
+[node name="Needle" type="Control" parent="Compass"]
+offset_left = 35.0
+offset_top = 15.0
+offset_right = 35.0
+offset_bottom = 15.0
+
+[node name="Line" type="ColorRect" parent="Compass/Needle"]
+offset_left = -2.0
+offset_top = -25.0
+offset_right = 2.0
+offset_bottom = 0.0
+color = Color(1, 0.2, 0.2, 1)
+
+[node name="LineBlue" type="ColorRect" parent="Compass/Needle"]
+offset_left = -2.0
+offset_top = 0.0
+offset_right = 2.0
+offset_bottom = 25.0
+color = Color(0.4, 0.6, 1.0, 1)
+
+[node name="MirrorFrame" type="TextureRect" parent="."]
+anchors_preset = 0
+anchor_left = 0.5
+anchor_top = 0.0
+anchor_right = 0.5
+anchor_bottom = 0.0
+offset_left = -160.0
+offset_top = 10.0
+offset_right = 160.0
+offset_bottom = 100.0
+stretch_mode = 5
+flip_h = true
+visible = false
+
+[node name="MessageLabel" type="Label" parent="."]
+anchors_preset = 5
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -200.0
+offset_top = -30.0
+offset_right = 200.0
+offset_bottom = 30.0
+text = ""
+horizontal_alignment = 1
+vertical_alignment = 1
+visible = false
+
+[node name="ItemNotif" type="Label" parent="."]
+anchors_preset = 5
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -250.0
+offset_top = 40.0
+offset_right = 250.0
+offset_bottom = 70.0
+text = ""
+horizontal_alignment = 1
+visible = false

@@ -1,0 +1,16 @@
+[gd_scene load_steps=3 format=3 uid="uid://mazelevel001"]
+
+[ext_resource type="Script" path="res://scripts/maze_level.gd" id="1_maze"]
+
+[sub_resource type="Environment" id="Environment_1"]
+background_mode = 1
+background_color = Color(0, 0, 0, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.04, 0.03, 0.05, 1)
+ambient_light_energy = 0.4
+
+[node name="MazeLevel" type="Node3D"]
+script = ExtResource("1_maze")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_1")
