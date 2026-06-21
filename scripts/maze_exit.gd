@@ -4,6 +4,8 @@ extends Area3D
 @onready var locked_light: OmniLight3D = $LockedLight
 @onready var open_light: OmniLight3D = $OpenLight
 
+@export var unlock_sfx: AudioStream
+
 var is_open := false
 
 func _ready() -> void:
@@ -20,6 +22,12 @@ func _on_exit_unlocked() -> void:
 	open_light.visible = true
 	if door_mesh:
 		door_mesh.visible = false
+	if unlock_sfx:
+		var ap := AudioStreamPlayer.new()
+		ap.stream = unlock_sfx
+		ap.autoplay = true
+		get_tree().root.add_child(ap)
+		ap.finished.connect(ap.queue_free)
 
 func _on_body_entered(body: Node3D) -> void:
 	if is_open and body.is_in_group("player"):

@@ -1,6 +1,9 @@
 extends Area3D
 
 @export var clue_id: int = 0
+@export var clue_text: String = ""
+@export var pickup_sfx: AudioStream
+
 var collected := false
 
 func _ready() -> void:
@@ -15,7 +18,13 @@ func _on_body_entered(body: Node3D) -> void:
 		return
 	if body.is_in_group("player"):
 		collected = true
+		if pickup_sfx:
+			var ap := AudioStreamPlayer.new()
+			ap.stream = pickup_sfx
+			ap.autoplay = true
+			get_tree().root.add_child(ap)
+			ap.finished.connect(ap.queue_free)
 		var gm = get_tree().get_first_node_in_group("game_manager")
 		if gm:
-			gm.collect_clue()
+			gm.collect_clue(clue_text)
 		queue_free()

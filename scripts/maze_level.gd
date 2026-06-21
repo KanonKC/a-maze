@@ -32,7 +32,7 @@ var ox: float
 var oz: float
 
 func _ready() -> void:
-	rng.seed = 2026
+	rng.randomize()
 	grid.resize(COLS * ROWS)
 	grid.fill(0)
 	ox = -COLS * STEP * 0.5
@@ -64,10 +64,31 @@ func _ready() -> void:
 	# 6. Spawn items
 	_spawn_items()
 
+	# 7. Spawn ghost in outer zone, far from player start
+	_spawn_ghost()
+
 func _cell_center(col: int, row: int) -> Vector3:
 	return Vector3(ox + col * STEP + CELL * 0.5, 1.0, oz + row * STEP + CELL * 0.5)
 
 func _spawn_items() -> void:
+	var clue_script := load("res://scripts/clue_item.gd")
+	var clue_texts := [
+		"มันเริ่มมาตั้งแต่คืนที่ไฟดับ...",
+		"ได้ยินเสียงหายใจข้างๆ แต่ไม่มีใคร",
+		"ทางออกอยู่ทางตะวันออก  อย่าหยุด",
+		"มันไม่ชอบแสง... หรือเปล่า?",
+		"คนสุดท้ายที่เข้ามาไม่ได้ออกไป",
+	]
+	var clue_positions := [
+		_cell_center(16, 1),   # Room 1: outer top-center
+		_cell_center(28, 6),   # Room 2: outer top-right
+		_cell_center(22, 10),  # Room 3: middle-right
+		_cell_center(2,  16),  # Room 4: outer bottom-left
+		_cell_center(25, 17),  # Room 5: outer bottom-right
+	]
+	for i in 5:
+		_make_clue(clue_positions[i], i, clue_texts[i], clue_script)
+
 	var pickup_script := load("res://scripts/pickup_item.gd")
 
 	# ── ชอล์ก ──────────────────────────────────────────────
@@ -81,6 +102,56 @@ func _spawn_items() -> void:
 	# ── DEV: วางใกล้ start ให้ทดสอบได้เลย ──────────────────
 	_make_pickup(_cell_center(14, 11), 0, pickup_script)  # chalk ซ้าย start
 	_make_pickup(_cell_center(18, 11), 1, pickup_script)  # mirror ขวา start
+
+func _make_clue(pos: Vector3, id: int, text: String, scr: Script) -> void:
+	var area := Area3D.new()
+	area.set_script(scr)
+	area.clue_id   = id
+	area.clue_text = text
+	area.position  = pos
+
+	var cs := CollisionShape3D.new()
+	cs.shape = SphereShape3D.new()
+	(cs.shape as SphereShape3D).radius = 0.6
+	area.add_child(cs)
+
+	var mi  := MeshInstance3D.new()
+	var mesh := SphereMesh.new()
+	mesh.radius = 0.22
+	mesh.height = 0.44
+	mi.mesh = mesh
+
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.95, 0.9, 0.5)
+	mat.emission_enabled = true
+	mat.emission = Color(0.8, 0.7, 0.2)
+	mat.emission_energy_multiplier = 1.5
+	mi.material_override = mat
+	area.add_child(mi)
+
+	add_child(area)
+
+func _spawn_ghost() -> void:
+	var ghost := CharacterBody3D.new()
+	ghost.set_script(load("res://scripts/ghost.gd"))
+
+	var cs := CollisionShape3D.new()
+	var cap := CapsuleShape3D.new()
+	cap.radius = 0.4
+	cap.height = 1.8
+	cs.shape = cap
+	cs.position = Vector3(0, 0.9, 0)
+	ghost.add_child(cs)
+
+	var audio := AudioStreamPlayer3D.new()
+	audio.name = "Audio"
+	audio.max_distance = 30.0
+	ghost.add_child(audio)
+
+	# Start far from player (top-right outer zone)
+	ghost.position = _cell_center(28, 3)
+
+	add_child(ghost)
 
 func _make_pickup(pos: Vector3, type: int, scr: Script) -> void:
 	var area := Area3D.new()

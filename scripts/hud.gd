@@ -50,13 +50,13 @@ func _process(delta: float) -> void:
 func setup(p: CharacterBody3D, gm: Node) -> void:
 	player = p
 	gm.clue_collected.connect(_on_clue_collected)
+	gm.clue_text_revealed.connect(_show_message)
 	gm.exit_unlocked.connect(_on_exit_unlocked)
 	player.item_picked_up.connect(_on_item_picked_up)
 	player.chalk_used.connect(func(_n): pass)  # chalk_label updates in _process
 
 func _on_clue_collected(count: int, total: int) -> void:
 	clue_label.text = "เบาะแส: %d/%d" % [count, total]
-	_show_message("พบเบาะแส!")
 
 func _on_exit_unlocked() -> void:
 	_show_message("ทางออกปรากฏแล้ว!")
