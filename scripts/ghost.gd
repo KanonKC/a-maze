@@ -18,6 +18,8 @@ var _search_timer    := 0.0
 var _patrol_dir      := Vector3.ZERO
 var _patrol_timer    := 0.0
 var _catch_cooldown  := 0.0
+var _tell_timer      := 0.0   # > 0 = ghost frozen in "tell" pose before pivoting
+var _tell_target     := Vector3.ZERO
 
 ## ─── Player behavior data ────────────────────────────────
 const _POS_BUFFER_SIZE := 20
@@ -181,6 +183,20 @@ func _enter_chase() -> void:
 		_aggro_audio.play()
 
 func _do_patrol(delta: float) -> void:
+	# "Tell" pause: ghost freezes briefly before pivoting to hiding spot (level 4+)
+	if _tell_timer > 0.0:
+		_tell_timer -= delta
+		velocity = Vector3.ZERO
+		move_and_slide()
+		if _tell_timer <= 0.0:
+			# Pivot complete — set direction toward remembered hiding spot
+			var to_target := (_tell_target - global_position)
+			to_target.y = 0.0
+			if to_target.length() > 0.5:
+				_patrol_dir = to_target.normalized()
+			_patrol_timer = randf_range(3.0, 6.0)
+		return
+
 	_patrol_timer -= delta
 	if _patrol_timer <= 0.0:
 		_pick_patrol_dir()
@@ -274,15 +290,11 @@ func _pick_patrol_dir() -> void:
 		_patrol_dir = Vector3(cos(angle), 0.0, sin(angle))
 		return
 
-	# Level 4+: go to the densest cluster in the position buffer (true hiding spot)
+	# Level 4+: "tell" pause then pivot toward densest cluster (hiding spot)
 	var hiding_spot: Vector3 = _find_hiding_spot()
-	var to_spot := (hiding_spot - global_position)
-	to_spot.y = 0.0
-	if to_spot.length() > 0.5:
-		_patrol_dir = to_spot.normalized()
-	else:
-		var angle := randf() * TAU
-		_patrol_dir = Vector3(cos(angle), 0.0, sin(angle))
+	_tell_target = hiding_spot
+	_tell_timer  = 0.5   # freeze 0.5s so player can observe ghost "thinking"
+	# _patrol_dir will be set after tell_timer expires in _do_patrol
 
 
 func _update_glow(delta: float) -> void:
