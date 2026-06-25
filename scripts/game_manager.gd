@@ -125,9 +125,62 @@ func collect_clue(text: String = "") -> void:
 	var ghost = get_tree().get_first_node_in_group("ghost")
 	if ghost and ghost.has_method("increase_speed"):
 		ghost.increase_speed()
+	_trigger_world_event(clues_found)
 	if clues_found >= CLUES_NEEDED and not exit_open:
 		exit_open = true
 		emit_signal("exit_unlocked")
+
+func _trigger_world_event(clue_count: int) -> void:
+	match clue_count:
+		1:
+			# Clue 1: flashlight flickers briefly — "it knows you found something"
+			_flash_flicker_event()
+		2:
+			# Clue 2: fog thickens suddenly then fades
+			_fog_surge_event()
+		3:
+			# Clue 3: lights cut out for 1.5s
+			_lights_out_event(1.5)
+		4:
+			# Clue 4: prolonged darkness — ghost now knows where you hide
+			_lights_out_event(3.0)
+		5:
+			# Clue 5: exit unlocked — handled by exit_unlocked signal, no extra event
+
+func _flash_flicker_event() -> void:
+	# Temporarily spike danger level to trigger flashlight flicker in player.gd
+	if player and player.has_method("set_danger_level"):
+		player.set_danger_level(1.0)
+		await get_tree().create_timer(0.6).timeout
+		player.set_danger_level(0.0)
+
+func _fog_surge_event() -> void:
+	var maze: Node = get_tree().get_first_node_in_group("maze_level")
+	if not maze:
+		return
+	var env_node = maze.get_node_or_null("WorldEnvironment")
+	if not env_node or not env_node.environment:
+		return
+	var env: Environment = env_node.environment
+	var original_density := env.fog_density
+	env.fog_density = 0.18
+	await get_tree().create_timer(2.0).timeout
+	env.fog_density = original_density
+
+func _lights_out_event(duration: float) -> void:
+	var maze: Node = get_tree().get_first_node_in_group("maze_level")
+	if not maze:
+		return
+	var env_node = maze.get_node_or_null("WorldEnvironment")
+	if not env_node or not env_node.environment:
+		return
+	var env: Environment = env_node.environment
+	var original_energy := env.ambient_light_energy
+	env.ambient_light_energy = 0.0
+	if player and player.has_method("set_danger_level"):
+		player.set_danger_level(0.8)
+	await get_tree().create_timer(duration).timeout
+	env.ambient_light_energy = original_energy
 
 func set_checkpoint(pos: Vector3) -> void:
 	checkpoint_position = pos
