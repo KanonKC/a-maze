@@ -35,6 +35,9 @@ var rng := RandomNumberGenerator.new()
 # Wall node references keyed "x,y,E" or "x,y,S" — used by maze-shift mechanic
 var _wall_nodes: Dictionary = {}
 
+# Cells that must never shift: room cells and chalk-marked cells
+var _locked_cells: Dictionary = {}   # key "x,y" → true
+
 # World-space offset so maze is centered at origin
 var ox: float
 var oz: float
@@ -63,6 +66,13 @@ func _ready() -> void:
 	_carve_room(21, 9,  3, 3)   # Room 3: middle-right
 	_carve_room(1,  15, 3, 3)   # Room 4: outer bottom-left
 	_carve_room(24, 17, 3, 2)   # Room 5: outer bottom-right
+
+	# Lock all room cells so they never shift
+	_lock_room_cells(15, 1,  3, 2)
+	_lock_room_cells(28, 5,  2, 3)
+	_lock_room_cells(21, 9,  3, 3)
+	_lock_room_cells(1,  15, 3, 3)
+	_lock_room_cells(24, 17, 3, 2)
 
 	# 4. Open east exit passage
 	grid[_idx(COLS - 1, EXIT_ROW)] |= DE
@@ -439,6 +449,13 @@ func _do_maze_shift(zone: int) -> void:
 				# Skip if player is looking at this wall
 				if cam.is_position_in_frustum(node.global_position):
 					continue
+				# Skip if either adjacent cell is locked (room or chalk mark)
+				var nx2 := x + (1 if dir_char == "E" else 0)
+				var ny2 := y + (1 if dir_char == "S" else 0)
+				if _locked_cells.has("%d,%d" % [x, y]):
+					continue
+				if _locked_cells.has("%d,%d" % [nx2, ny2]):
+					continue
 				candidates.append(key)
 
 	if candidates.is_empty():
@@ -448,6 +465,20 @@ func _do_maze_shift(zone: int) -> void:
 	var pick: String = candidates[rng.randi_range(0, candidates.size() - 1)]
 	var parts := pick.split(",")
 	_swap_wall(int(parts[0]), int(parts[1]), parts[2])
+
+func _lock_room_cells(rx: int, ry: int, rw: int, rh: int) -> void:
+	for y in range(ry, ry + rh):
+		for x in range(rx, rx + rw):
+			if _in_bounds(x, y):
+				_locked_cells["%d,%d" % [x, y]] = true
+
+# Called by chalk_mark.gd after a mark is placed — locks the nearest cell
+func lock_cell_at(world_pos: Vector3) -> void:
+	var col := int((world_pos.x - ox) / STEP)
+	var row := int((world_pos.z - oz) / STEP)
+	col = clamp(col, 0, COLS - 1)
+	row = clamp(row, 0, ROWS - 1)
+	_locked_cells["%d,%d" % [col, row]] = true
 
 func _on_exit_unlocked() -> void:
 	if _exit_light:

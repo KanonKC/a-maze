@@ -12,3 +12,8 @@ func _ready() -> void:
 	mat.emission_energy_multiplier = 0.8
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material_override = mat
+
+	# Notify maze so this cell is locked from shifting
+	var maze: Node = get_tree().get_first_node_in_group("maze_level")
+	if maze and maze.has_method("lock_cell_at"):
+		maze.lock_cell_at(global_position)
