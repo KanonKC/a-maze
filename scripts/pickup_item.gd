@@ -6,6 +6,7 @@ enum ItemType { CHALK, MIRROR }
 var _base_y: float
 
 func _ready() -> void:
+	add_to_group("pickup")
 	_base_y = position.y
 	body_entered.connect(_on_body_entered)
 

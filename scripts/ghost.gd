@@ -3,7 +3,7 @@ extends CharacterBody3D
 enum State { PATROL, CHASE, SEARCH }
 
 const PATROL_SPEED    := 2.0
-const CHASE_SPEED     := 5.5
+var chase_speed       := 5.5
 const DETECT_RANGE    := 12.0
 const HEAR_RANGE      := 5.0
 const SEARCH_DURATION := 6.0
@@ -20,15 +20,44 @@ var _patrol_timer    := 0.0
 var _catch_cooldown  := 0.0
 
 @export var ambient_sfx: AudioStream
+@export var aggro_sfx:   AudioStream
+
+var _aggro_audio: AudioStreamPlayer3D
+var _glow: OmniLight3D
+
+func increase_speed() -> void:
+	chase_speed = minf(chase_speed * 1.15, 5.5 * 2.0)
 
 func _ready() -> void:
 	add_to_group("ghost")
 	player = get_tree().get_first_node_in_group("player")
 	_pick_patrol_dir()
+
+	# Breathing / ambient loop — quiet, always on
+	# (Enable looping on the AudioStream resource in the Inspector)
 	var audio := $Audio as AudioStreamPlayer3D
 	if audio and ambient_sfx:
-		audio.stream = ambient_sfx
+		audio.stream    = ambient_sfx
+		audio.volume_db = -18.0
 		audio.play()
+
+	# One-shot aggro sting node
+	_aggro_audio = AudioStreamPlayer3D.new()
+	_aggro_audio.name       = "AggroAudio"
+	_aggro_audio.volume_db  = -6.0
+	add_child(_aggro_audio)
+
+	# Find OmniLight3D added by maze_level._spawn_ghost()
+	for child in get_children():
+		if child is OmniLight3D:
+			_glow = child
+			break
+
+func is_frozen() -> bool:
+	return _player_is_watching() and not _player_flashlight_active()
+
+func _player_flashlight_active() -> bool:
+	return player.get_flashlight_on()
 
 func _physics_process(delta: float) -> void:
 	if not is_instance_valid(player):
@@ -36,11 +65,19 @@ func _physics_process(delta: float) -> void:
 
 	_catch_cooldown = maxf(_catch_cooldown - delta, 0.0)
 
+	# If player is looking at ghost AND flashlight is on → ghost aggroes instead of freezing
 	if _player_is_watching():
-		velocity = Vector3.ZERO
-		move_and_slide()
-		_update_danger()
-		return
+		if _player_flashlight_active():
+			# Flashlight reveals player's position — force Chase
+			if state != State.CHASE:
+				_enter_chase()
+		else:
+			# Normal freeze: player stares at ghost without flashlight
+			velocity = Vector3.ZERO
+			move_and_slide()
+			_update_danger()
+			_update_glow(delta)
+			return
 
 	match state:
 		State.PATROL: _do_patrol(delta)
@@ -48,6 +85,7 @@ func _physics_process(delta: float) -> void:
 		State.SEARCH: _do_search(delta)
 
 	_update_danger()
+	_update_glow(delta)
 
 	if _catch_cooldown <= 0.0 and global_position.distance_to(player.global_position) < CATCH_DIST:
 		_catch_player()
@@ -81,7 +119,8 @@ func _player_is_watching() -> bool:
 
 func _can_detect_player() -> bool:
 	var dist := global_position.distance_to(player.global_position)
-	if dist <= HEAR_RANGE:
+	var effective_hear := HEAR_RANGE * (0.5 if player.is_crouching else 1.0)
+	if dist <= effective_hear:
 		return true
 	if dist <= DETECT_RANGE:
 		var space := get_world_3d().direct_space_state
@@ -94,6 +133,12 @@ func _can_detect_player() -> bool:
 		return hit.is_empty() or hit.get("collider") == player
 	return false
 
+func _enter_chase() -> void:
+	state = State.CHASE
+	if _aggro_audio and aggro_sfx:
+		_aggro_audio.stream = aggro_sfx
+		_aggro_audio.play()
+
 func _do_patrol(delta: float) -> void:
 	_patrol_timer -= delta
 	if _patrol_timer <= 0.0:
@@ -102,14 +147,14 @@ func _do_patrol(delta: float) -> void:
 	if get_slide_collision_count() > 0:
 		_pick_patrol_dir()
 	if _can_detect_player():
-		state = State.CHASE
+		_enter_chase()
 
 func _do_chase(delta: float) -> void:
 	var dir := (player.global_position - global_position)
 	dir.y = 0.0
 	if dir.length() > 0.01:
 		dir = dir.normalized()
-	_move(dir, CHASE_SPEED, delta)
+	_move(dir, chase_speed, delta)
 	var look_pos := player.global_position
 	look_pos.y = global_position.y
 	if look_pos.distance_to(global_position) > 0.1:
@@ -137,7 +182,7 @@ func _do_search(delta: float) -> void:
 		state = State.PATROL
 		_pick_patrol_dir()
 	if _can_detect_player():
-		state = State.CHASE
+		_enter_chase()
 
 func _move(dir: Vector3, speed: float, delta: float) -> void:
 	velocity.x = dir.x * speed
@@ -152,6 +197,24 @@ func _pick_patrol_dir() -> void:
 	var angle     := randf() * TAU
 	_patrol_dir   = Vector3(cos(angle), 0.0, sin(angle))
 	_patrol_timer = randf_range(2.0, 5.0)
+
+func _update_glow(delta: float) -> void:
+	if not _glow:
+		return
+	var target_color: Color
+	var target_energy: float
+	match state:
+		State.PATROL:
+			target_color  = Color(0.6, 0.7, 1.0)
+			target_energy = 0.8
+		State.SEARCH:
+			target_color  = Color(1.0, 0.6, 0.1)
+			target_energy = 1.2
+		State.CHASE:
+			target_color  = Color(1.0, 0.15, 0.1)
+			target_energy = sin(Time.get_ticks_msec() * 0.006) * 0.75 + 2.25
+	_glow.light_color  = _glow.light_color.lerp(target_color, 5.0 * delta)
+	_glow.light_energy = lerpf(_glow.light_energy, target_energy, 5.0 * delta)
 
 func _update_danger() -> void:
 	var dist  := global_position.distance_to(player.global_position)

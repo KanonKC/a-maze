@@ -1,5 +1,10 @@
 extends Node3D
 
+# ─── Exit light (class var for signal callback) ───────────
+var _exit_light: OmniLight3D
+
+@onready var _world_env: WorldEnvironment = $WorldEnvironment
+
 # ─── Grid constants ───────────────────────────────────────
 const COLS  := 32
 const ROWS  := 22
@@ -32,6 +37,7 @@ var ox: float
 var oz: float
 
 func _ready() -> void:
+	add_to_group("maze_level")
 	rng.randomize()
 	grid.resize(COLS * ROWS)
 	grid.fill(0)
@@ -60,6 +66,17 @@ func _ready() -> void:
 
 	# 5. Build 3D geometry
 	_build_geometry()
+
+	# Enable fog
+	if _world_env and _world_env.environment:
+		_world_env.environment.fog_enabled = true
+		_world_env.environment.fog_density = 0.02
+		_world_env.environment.fog_light_color = Color(0.05, 0.03, 0.08)
+
+	# Connect exit_unlocked signal from game_manager
+	var gm = get_tree().get_first_node_in_group("game_manager")
+	if gm and gm.has_signal("exit_unlocked"):
+		gm.exit_unlocked.connect(_on_exit_unlocked)
 
 	# 6. Spawn items
 	_spawn_items()
@@ -147,6 +164,31 @@ func _spawn_ghost() -> void:
 	audio.name = "Audio"
 	audio.max_distance = 30.0
 	ghost.add_child(audio)
+
+	# Body mesh: semi-transparent white capsule
+	var mi   := MeshInstance3D.new()
+	var mesh := CapsuleMesh.new()
+	mesh.radius = 0.4
+	mesh.height = 1.8
+	mi.mesh = mesh
+	mi.position = Vector3(0, 0.9, 0)
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color         = Color(0.85, 0.92, 1.0, 0.35)
+	mat.emission_enabled     = true
+	mat.emission             = Color(0.5, 0.6, 1.0)
+	mat.emission_energy_multiplier = 0.8
+	mat.transparency         = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.blend_mode           = BaseMaterial3D.BLEND_MODE_ADD
+	mi.material_override = mat
+	ghost.add_child(mi)
+
+	# Glow light so the ghost illuminates nearby walls
+	var light        := OmniLight3D.new()
+	light.position    = Vector3(0, 0.9, 0)
+	light.light_color = Color(0.5, 0.6, 1.0)
+	light.light_energy = 1.2
+	light.omni_range  = 4.0
+	ghost.add_child(light)
 
 	# Start far from player (top-right outer zone)
 	ghost.position = _cell_center(28, 3)
@@ -337,6 +379,21 @@ func _build_geometry() -> void:
 	# Exit trigger area (Area3D just outside east wall)
 	_place_exit_trigger(east_x + 1.5, exit_z0 + STEP * 0.5)
 
+func _process(delta: float) -> void:
+	if _world_env and _world_env.environment:
+		var player = get_tree().get_first_node_in_group("player")
+		if player and player.has_method("get_danger_level"):
+			var d: float = player.get_danger_level()
+			_world_env.environment.fog_density = lerp(
+				_world_env.environment.fog_density,
+				0.02 + d * 0.06,
+				5.0 * delta
+			)
+
+func _on_exit_unlocked() -> void:
+	if _exit_light:
+		_exit_light.light_color = Color(0.2, 1.0, 0.4)
+
 func _place_exit_trigger(x: float, z: float) -> void:
 	var area := Area3D.new()
 	area.position = Vector3(x, 1.0, z)
@@ -352,6 +409,50 @@ func _place_exit_trigger(x: float, z: float) -> void:
 			if gm: gm.on_player_exit()
 	)
 	add_child(area)
+
+	# ── Exit arch geometry ────────────────────────────────────
+	var arch_mat := StandardMaterial3D.new()
+	arch_mat.albedo_color = Color(0.18, 0.15, 0.22)
+	arch_mat.roughness = 1.0
+
+	var pillar_size := Vector3(0.4, 3.0, 0.4)
+	var half_gap := STEP * 0.5   # half the exit gap width in Z
+
+	# Left pillar
+	var lp := MeshInstance3D.new()
+	var lp_mesh := BoxMesh.new()
+	lp_mesh.size = pillar_size
+	lp.mesh = lp_mesh
+	lp.material_override = arch_mat
+	lp.position = Vector3(x, WALL_H * 0.5, z - half_gap + 0.2)
+	add_child(lp)
+
+	# Right pillar
+	var rp := MeshInstance3D.new()
+	var rp_mesh := BoxMesh.new()
+	rp_mesh.size = pillar_size
+	rp.mesh = rp_mesh
+	rp.material_override = arch_mat
+	rp.position = Vector3(x, WALL_H * 0.5, z + half_gap - 0.2)
+	add_child(rp)
+
+	# Lintel (horizontal bar above)
+	var lintel := MeshInstance3D.new()
+	var lintel_mesh := BoxMesh.new()
+	lintel_mesh.size = Vector3(0.4, 0.4, STEP)
+	lintel.mesh = lintel_mesh
+	lintel.material_override = arch_mat
+	lintel.position = Vector3(x, WALL_H - 0.2, z)
+	add_child(lintel)
+
+	# Exit OmniLight — red (locked) until exit_unlocked signal
+	var light := OmniLight3D.new()
+	light.light_color = Color(1.0, 0.2, 0.2)
+	light.light_energy = 2.0
+	light.omni_range = 6.0
+	light.position = Vector3(x, WALL_H * 0.5, z)
+	add_child(light)
+	_exit_light = light
 
 func _mat(c: Color) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()

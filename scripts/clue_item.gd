@@ -7,6 +7,7 @@ extends Area3D
 var collected := false
 
 func _ready() -> void:
+	add_to_group("clue")
 	body_entered.connect(_on_body_entered)
 
 func _process(delta: float) -> void:

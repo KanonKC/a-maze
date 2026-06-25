@@ -29,6 +29,9 @@ var _mirror_viewport: SubViewport
 var _mirror_cam: Camera3D
 var _mirror_active := false
 
+var _hum_player: AudioStreamPlayer
+var _hum_phase := 0.0
+
 # ── Signals ────────────────────────────────────────────────
 signal item_picked_up(item_name: String)
 signal chalk_used(remaining: int)
@@ -44,6 +47,17 @@ func _ready() -> void:
 	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
 	flashlight.visible = false
 	_setup_mirror()
+	_setup_hum()
+
+func _setup_hum() -> void:
+	var gen := AudioStreamGenerator.new()
+	gen.mix_rate = 22050.0
+	gen.buffer_length = 0.1
+	_hum_player = AudioStreamPlayer.new()
+	_hum_player.stream = gen
+	_hum_player.volume_db = -30.0
+	add_child(_hum_player)
+	_hum_player.play()
 
 func _setup_mirror() -> void:
 	_mirror_viewport = SubViewport.new()
@@ -56,12 +70,13 @@ func _setup_mirror() -> void:
 	_mirror_viewport.add_child(_mirror_cam)
 
 # ── Input ──────────────────────────────────────────────────
-func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventMouseMotion:
+func _input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion and Input.get_mouse_mode() == Input.MOUSE_MODE_CAPTURED:
 		rotate_y(-event.relative.x * MOUSE_SENS)
 		camera_mount.rotate_x(-event.relative.y * MOUSE_SENS)
 		camera_mount.rotation.x = clamp(camera_mount.rotation.x, deg_to_rad(-80), deg_to_rad(80))
 
+func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("toggle_flashlight"):
 		_toggle_flashlight()
 	if event.is_action_pressed("use_chalk"):
@@ -72,7 +87,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_released("use_mirror"):
 		_mirror_active = false
 		_mirror_viewport.render_target_update_mode = SubViewport.UPDATE_WHEN_VISIBLE
-	if event.is_action_pressed("ui_cancel"):
+	if event.is_action_pressed("ui_cancel") and not get_tree().paused:
 		Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 
 # ── Per-frame ──────────────────────────────────────────────
@@ -82,6 +97,19 @@ func _physics_process(delta: float) -> void:
 	_handle_flashlight(delta)
 	_handle_footsteps(delta)
 	_sync_mirror_cam()
+	_push_hum_samples()
+
+func _push_hum_samples() -> void:
+	if not _hum_player or not _hum_player.playing:
+		return
+	var playback := _hum_player.get_stream_playback() as AudioStreamGeneratorPlayback
+	if not playback:
+		return
+	var frames := playback.get_frames_available()
+	var freq: float = lerp(40.0, 120.0, _danger_level)
+	for i in frames:
+		_hum_phase += freq / 22050.0 * TAU
+		playback.push_frame(Vector2.ONE * sin(_hum_phase) * 0.15)
 
 func _handle_movement(delta: float) -> void:
 	if not is_on_floor():
@@ -152,11 +180,17 @@ func _sync_mirror_cam() -> void:
 	_mirror_cam.global_rotation = camera.global_rotation + Vector3(0, PI, 0)
 
 # ── Getters (for HUD) ──────────────────────────────────────
-func get_flashlight_on() -> bool:     return flashlight_on
-func get_flashlight_energy() -> float: return flashlight_energy
-func get_mirror_active() -> bool:     return _mirror_active and has_mirror
+func get_flashlight_on() -> bool:      return flashlight_on
+func get_flashlight_energy() -> float:  return flashlight_energy
+func get_mirror_active() -> bool:      return _mirror_active and has_mirror
 func get_mirror_texture() -> ViewportTexture: return _mirror_viewport.get_texture()
-func get_danger_level() -> float:     return _danger_level
+func get_danger_level() -> float:      return _danger_level
+
+func is_freezing_ghost() -> bool:
+	var ghost: Node = get_tree().get_first_node_in_group("ghost")
+	if ghost and ghost.has_method("is_frozen"):
+		return ghost.is_frozen()
+	return false
 
 func set_danger_level(v: float) -> void:
 	_danger_level = clampf(v, 0.0, 1.0)
