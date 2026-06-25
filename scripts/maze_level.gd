@@ -32,6 +32,9 @@ const EXIT_ROW := 11
 var grid: Array[int] = []
 var rng := RandomNumberGenerator.new()
 
+# Wall node references keyed "x,y,E" or "x,y,S" — used by maze-shift mechanic
+var _wall_nodes: Dictionary = {}
+
 # World-space offset so maze is centered at origin
 var ox: float
 var oz: float
@@ -352,21 +355,25 @@ func _build_geometry() -> void:
 			var cz := oz + y * STEP   # top edge of cell
 			var wall_mat: StandardMaterial3D = mats[_zone(x, y)] as StandardMaterial3D
 
-			# East wall (if no passage to east)
-			if x + 1 < COLS and not (grid[_idx(x, y)] & DE):
-				_box(
+			# East wall — always create node, show/hide based on grid bitmask
+			if x + 1 < COLS:
+				var ew := _box(
 					Vector3(cx + CELL + WALL_T * 0.5, WALL_H * 0.5, cz + CELL * 0.5),
 					Vector3(WALL_T, WALL_H, CELL),
 					wall_mat
 				)
+				ew.visible = not (grid[_idx(x, y)] & DE)
+				_wall_nodes["%d,%d,E" % [x, y]] = ew
 
-			# South wall (if no passage to south)
-			if y + 1 < ROWS and not (grid[_idx(x, y)] & DS):
-				_box(
+			# South wall — always create node, show/hide based on grid bitmask
+			if y + 1 < ROWS:
+				var sw := _box(
 					Vector3(cx + CELL * 0.5, WALL_H * 0.5, cz + CELL + WALL_T * 0.5),
 					Vector3(CELL, WALL_H, WALL_T),
 					wall_mat
 				)
+				sw.visible = not (grid[_idx(x, y)] & DS)
+				_wall_nodes["%d,%d,S" % [x, y]] = sw
 
 			# Pillar at SE corner (always fill corner)
 			if x + 1 < COLS and y + 1 < ROWS:
@@ -460,7 +467,7 @@ func _mat(c: Color) -> StandardMaterial3D:
 	m.roughness = 1.0
 	return m
 
-func _box(pos: Vector3, size: Vector3, mat: StandardMaterial3D) -> void:
+func _box(pos: Vector3, size: Vector3, mat: StandardMaterial3D) -> StaticBody3D:
 	var body := StaticBody3D.new()
 	body.position = pos
 
@@ -478,3 +485,26 @@ func _box(pos: Vector3, size: Vector3, mat: StandardMaterial3D) -> void:
 	body.add_child(mi)
 
 	add_child(body)
+	return body
+
+# Toggle a single interior wall on/off and update the grid bitmask.
+# dir_char: "E" or "S"
+func _swap_wall(x: int, y: int, dir_char: String) -> void:
+	var key := "%d,%d,%s" % [x, y, dir_char]
+	if not _wall_nodes.has(key):
+		return
+	var node: StaticBody3D = _wall_nodes[key]
+	var dir_bit := DE if dir_char == "E" else DS
+	var opp_bit := OPP[dir_bit]
+	var nx := x + (1 if dir_char == "E" else 0)
+	var ny := y + (1 if dir_char == "S" else 0)
+
+	if node.visible:
+		# Wall exists → open passage
+		grid[_idx(x, y)]   |= dir_bit
+		grid[_idx(nx, ny)] |= opp_bit
+	else:
+		# Passage exists → close it
+		grid[_idx(x, y)]   &= ~dir_bit
+		grid[_idx(nx, ny)] &= ~opp_bit
+	node.visible = not node.visible
