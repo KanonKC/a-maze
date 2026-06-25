@@ -19,6 +19,14 @@ var _patrol_dir      := Vector3.ZERO
 var _patrol_timer    := 0.0
 var _catch_cooldown  := 0.0
 
+## ─── Player behavior data ────────────────────────────────
+const _POS_BUFFER_SIZE := 20
+var _visited_positions: Array[Vector3] = []
+var _flashlight_uses   := 0
+var _favorite_zone     := -1   # 0=inner 1=middle 2=outer; -1=unknown
+var _pos_sample_timer  := 0.0
+var _last_flashlight_state := false
+
 @export var ambient_sfx: AudioStream
 @export var aggro_sfx:   AudioStream
 
@@ -53,17 +61,50 @@ func _ready() -> void:
 			_glow = child
 			break
 
+	# Flashlight usage tracked by polling in _sample_player_behavior
+
 func is_frozen() -> bool:
 	return _player_is_watching() and not _player_flashlight_active()
 
 func _player_flashlight_active() -> bool:
-	return player.get_flashlight_on()
+	var on := player.get_flashlight_on()
+	return on
+
+func _sample_player_behavior(delta: float) -> void:
+	_pos_sample_timer -= delta
+	if _pos_sample_timer > 0.0:
+		return
+	_pos_sample_timer = 1.0   # sample every second
+
+	# Count flashlight toggles by comparing previous state
+	var fl_now := player.get_flashlight_on()
+	if fl_now != _last_flashlight_state:
+		_flashlight_uses += 1
+		_last_flashlight_state = fl_now
+
+	var pos := player.global_position
+	_visited_positions.append(pos)
+	if _visited_positions.size() > _POS_BUFFER_SIZE:
+		_visited_positions.pop_front()
+
+	# Determine favorite zone by majority in buffer
+	var counts := [0, 0, 0]
+	var maze: Node = get_tree().get_first_node_in_group("maze_level")
+	if maze and maze.has_method("_zone"):
+		for p: Vector3 in _visited_positions:
+			var col := int((p.x - maze.ox) / maze.STEP)
+			var row := int((p.z - maze.oz) / maze.STEP)
+			col = clamp(col, 0, maze.COLS - 1)
+			row = clamp(row, 0, maze.ROWS - 1)
+			counts[maze._zone(col, row)] += 1
+	_favorite_zone = counts.find(counts.max())
 
 func _physics_process(delta: float) -> void:
 	if not is_instance_valid(player):
 		return
 
 	_catch_cooldown = maxf(_catch_cooldown - delta, 0.0)
+	_sample_player_behavior(delta)
 
 	# If player is looking at ghost AND flashlight is on → ghost aggroes instead of freezing
 	if _player_is_watching():
