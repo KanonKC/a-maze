@@ -386,6 +386,13 @@ func _build_geometry() -> void:
 	# Exit trigger area (Area3D just outside east wall)
 	_place_exit_trigger(east_x + 1.5, exit_z0 + STEP * 0.5)
 
+## ─── Maze-shift timers (zone-based) ──────────────────────
+## Inner (zone 0) = never changes
+## Middle (zone 1) = ~30s interval
+## Middle (zone 2) = ~12-15s interval
+var _shift_timer_middle := 30.0
+var _shift_timer_outer  := 13.0
+
 func _process(delta: float) -> void:
 	if _world_env and _world_env.environment:
 		var player = get_tree().get_first_node_in_group("player")
@@ -396,6 +403,51 @@ func _process(delta: float) -> void:
 				0.02 + d * 0.06,
 				5.0 * delta
 			)
+	_tick_maze_shift(delta)
+
+func _tick_maze_shift(delta: float) -> void:
+	_shift_timer_middle -= delta
+	_shift_timer_outer  -= delta
+
+	if _shift_timer_middle <= 0.0:
+		_shift_timer_middle = randf_range(25.0, 35.0)
+		_do_maze_shift(1)
+
+	if _shift_timer_outer <= 0.0:
+		_shift_timer_outer = randf_range(12.0, 15.0)
+		_do_maze_shift(2)
+
+func _do_maze_shift(zone: int) -> void:
+	var player_node = get_tree().get_first_node_in_group("player")
+	if not is_instance_valid(player_node):
+		return
+	var cam: Camera3D = player_node.get_node_or_null("CameraMount/Camera3D")
+	if not cam:
+		return
+
+	# Collect candidate walls in this zone that are outside player view
+	var candidates: Array = []
+	for y in ROWS:
+		for x in COLS:
+			if _zone(x, y) != zone:
+				continue
+			for dir_char in ["E", "S"]:
+				var key := "%d,%d,%s" % [x, y, dir_char]
+				if not _wall_nodes.has(key):
+					continue
+				var node: StaticBody3D = _wall_nodes[key]
+				# Skip if player is looking at this wall
+				if cam.is_position_in_frustum(node.global_position):
+					continue
+				candidates.append(key)
+
+	if candidates.is_empty():
+		return
+
+	# Swap one random eligible wall
+	var pick: String = candidates[rng.randi_range(0, candidates.size() - 1)]
+	var parts := pick.split(",")
+	_swap_wall(int(parts[0]), int(parts[1]), parts[2])
 
 func _on_exit_unlocked() -> void:
 	if _exit_light:
