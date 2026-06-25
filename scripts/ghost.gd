@@ -234,10 +234,56 @@ func _move(dir: Vector3, speed: float, delta: float) -> void:
 		velocity.y = 0.0
 	move_and_slide()
 
+func _find_hiding_spot() -> Vector3:
+	# Find the position with the most neighbors within 3 units — densest cluster
+	var best_pos  := _visited_positions[0]
+	var best_count := 0
+	for i in _visited_positions.size():
+		var count := 0
+		for j in _visited_positions.size():
+			if i != j and _visited_positions[i].distance_to(_visited_positions[j]) < 3.0:
+				count += 1
+		if count > best_count:
+			best_count = count
+			best_pos   = _visited_positions[i]
+	return best_pos
+
+func _clues_found() -> int:
+	var gm := get_tree().get_first_node_in_group("game_manager")
+	return gm.clues_found if gm else 0
+
 func _pick_patrol_dir() -> void:
-	var angle     := randf() * TAU
-	_patrol_dir   = Vector3(cos(angle), 0.0, sin(angle))
 	_patrol_timer = randf_range(2.0, 5.0)
+	var clues := _clues_found()
+
+	# Level 0-1: pure random patrol
+	if clues <= 1 or _visited_positions.is_empty():
+		var angle := randf() * TAU
+		_patrol_dir = Vector3(cos(angle), 0.0, sin(angle))
+		return
+
+	# Level 2-3: weighted toward a remembered position
+	if clues <= 3:
+		var target: Vector3 = _visited_positions[randi_range(0, _visited_positions.size() - 1)]
+		var to_target := (target - global_position)
+		to_target.y = 0.0
+		if to_target.length() > 0.5:
+			_patrol_dir = to_target.normalized()
+			return
+		var angle := randf() * TAU
+		_patrol_dir = Vector3(cos(angle), 0.0, sin(angle))
+		return
+
+	# Level 4+: go to the densest cluster in the position buffer (true hiding spot)
+	var hiding_spot: Vector3 = _find_hiding_spot()
+	var to_spot := (hiding_spot - global_position)
+	to_spot.y = 0.0
+	if to_spot.length() > 0.5:
+		_patrol_dir = to_spot.normalized()
+	else:
+		var angle := randf() * TAU
+		_patrol_dir = Vector3(cos(angle), 0.0, sin(angle))
+
 
 func _update_glow(delta: float) -> void:
 	if not _glow:
