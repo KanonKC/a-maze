@@ -31,6 +31,11 @@ func _ready() -> void:
 	game_won.connect(_end_screen.show_win)
 	_build_pause_menu()
 	_build_debug_overlay()
+	_build_post_process()
+
+func _build_post_process() -> void:
+	var pp = load("res://scripts/post_process.gd").new()
+	add_child(pp)
 
 func _build_pause_menu() -> void:
 	_pause_layer = CanvasLayer.new()
