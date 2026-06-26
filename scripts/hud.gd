@@ -14,6 +14,9 @@ var player: CharacterBody3D
 var _compass_angle := 0.0
 var _mirror_texture_set := false
 
+var _clue_display: Label
+var _clue_tween: Tween
+
 # Crosshair nodes created in code
 var _crosshair_h: ColorRect
 var _crosshair_v: ColorRect
@@ -30,6 +33,26 @@ func _ready() -> void:
 	chalk_label.text      = ""
 	_build_crosshair()
 	_build_crouch_label()
+	_build_clue_display()
+
+func _build_clue_display() -> void:
+	_clue_display = Label.new()
+	_clue_display.anchor_left   = 0.5
+	_clue_display.anchor_right  = 0.5
+	_clue_display.anchor_top    = 0.65
+	_clue_display.anchor_bottom = 0.65
+	_clue_display.offset_left   = -320
+	_clue_display.offset_right  =  320
+	_clue_display.offset_top    = 0
+	_clue_display.offset_bottom = 160
+	_clue_display.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_clue_display.vertical_alignment   = VERTICAL_ALIGNMENT_TOP
+	_clue_display.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_clue_display.add_theme_font_size_override("font_size", 16)
+	_clue_display.add_theme_color_override("font_color", Color(0.91, 0.875, 0.784))
+	_clue_display.modulate.a = 0.0
+	_clue_display.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_clue_display)
 
 func _build_crouch_label() -> void:
 	_crouch_label = Label.new()
@@ -144,10 +167,21 @@ func _process(delta: float) -> void:
 	if _crouch_label:
 		_crouch_label.visible = player.is_crouching
 
+func _show_clue_text(text: String) -> void:
+	if not _clue_display:
+		return
+	_clue_display.text = text
+	if _clue_tween and _clue_tween.is_valid():
+		_clue_tween.kill()
+	_clue_tween = create_tween()
+	_clue_tween.tween_property(_clue_display, "modulate:a", 1.0, 0.8)
+	_clue_tween.tween_interval(5.0)
+	_clue_tween.tween_property(_clue_display, "modulate:a", 0.0, 1.2)
+
 func setup(p: CharacterBody3D, gm: Node) -> void:
 	player = p
 	gm.clue_collected.connect(_on_clue_collected)
-	gm.clue_text_revealed.connect(_show_message)
+	gm.clue_text_revealed.connect(_show_clue_text)
 	gm.checkpoint_saved.connect(func(): _show_message("คุณจำสถานที่นี้ไว้..."))
 	gm.exit_unlocked.connect(_on_exit_unlocked)
 	gm.player_caught.connect(flash_caught)
