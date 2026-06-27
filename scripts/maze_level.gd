@@ -101,6 +101,9 @@ func _ready() -> void:
 	# 7. Spawn ghost in outer zone, far from player start
 	_spawn_ghost()
 
+	# 8. Decorate landmark rooms with placeholder props
+	_spawn_room_props()
+
 	# Wall shift audio
 	_wall_shift_audio = AudioStreamPlayer.new()
 	var ws_stream := load("res://assets/sounds/wall_shift.wav") as AudioStreamWAV
@@ -576,6 +579,139 @@ func _place_exit_trigger(x: float, z: float) -> void:
 	light.position = Vector3(x, WALL_H * 0.5, z)
 	add_child(light)
 	_exit_light = light
+
+# ─── Room Prop Helpers ────────────────────────────────────
+func _room_pos(col: int, row: int) -> Vector3:
+	var c := _cell_center(col, row)
+	return Vector3(c.x, 0.0, c.z)
+
+func _prop_box(pos: Vector3, size: Vector3, color: Color) -> void:
+	var mi := MeshInstance3D.new()
+	var mesh := BoxMesh.new()
+	mesh.size = size
+	mi.mesh = mesh
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = color
+	mat.roughness = 0.9
+	mi.material_override = mat
+	mi.position = pos
+	add_child(mi)
+
+func _prop_cylinder(pos: Vector3, radius: float, height: float, color: Color) -> void:
+	var mi := MeshInstance3D.new()
+	var mesh := CylinderMesh.new()
+	mesh.top_radius = radius
+	mesh.bottom_radius = radius
+	mesh.height = height
+	mi.mesh = mesh
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = color
+	mat.roughness = 0.9
+	mi.material_override = mat
+	mi.position = pos
+	add_child(mi)
+
+func _room_light(pos: Vector3, color: Color, energy: float, range_m: float) -> void:
+	var light := OmniLight3D.new()
+	light.position = pos
+	light.light_color = color
+	light.light_energy = energy
+	light.omni_range = range_m
+	add_child(light)
+
+# ─── Landmark Room Decorations ────────────────────────────
+func _spawn_room_props() -> void:
+	_decorate_room1()
+	_decorate_room2()
+	_decorate_room3()
+	_decorate_room4()
+	_decorate_room5()
+
+# Room 1 — ห้องพักคนงาน | Clue 2: สมุดค่าแรงของนวล
+func _decorate_room1() -> void:
+	var o := _room_pos(16, 1)
+	# เสื่อนอน
+	_prop_box(o + Vector3(-1.2, 0.03, 0.8),  Vector3(1.4, 0.06, 0.7),  Color(0.42, 0.32, 0.22))
+	# ถ้วยกาแฟ 3 ใบ
+	_prop_cylinder(o + Vector3( 0.5, 0.08, -0.4), 0.08, 0.14, Color(0.22, 0.17, 0.13))
+	_prop_cylinder(o + Vector3( 0.8, 0.08, -0.2), 0.08, 0.14, Color(0.27, 0.20, 0.14))
+	_prop_cylinder(o + Vector3( 0.6, 0.08,  0.4), 0.08, 0.14, Color(0.20, 0.16, 0.12))
+	# ปฏิทิน บนกำแพงเหนือ (north wall dz ≈ -1.4 from cell center)
+	_prop_box(o + Vector3(0.4, 1.2, -1.4), Vector3(0.5, 0.65, 0.03), Color(0.82, 0.78, 0.70))
+	_room_light(o + Vector3(0, 2.5, 0), Color(1.0, 0.70, 0.40), 0.6, 8.0)
+
+# Room 2 — ห้องเก็บเครื่องมือ | Clue 1: โน้ตของศุภกร
+func _decorate_room2() -> void:
+	var o := _room_pos(28, 6)
+	# ชั้นวางเครื่องมือ ชิดผนังตะวันออก (east wall dx ≈ +4.3)
+	_prop_box(o + Vector3(4.3, 0.75, 0.0),  Vector3(0.2, 1.5, 2.5), Color(0.32, 0.25, 0.16))
+	_prop_box(o + Vector3(4.2, 1.15, -0.6), Vector3(0.2, 0.22, 0.30), Color(0.45, 0.38, 0.25))
+	_prop_box(o + Vector3(4.2, 1.15,  0.4), Vector3(0.22, 0.18, 0.25), Color(0.40, 0.32, 0.20))
+	# ท่อเหล็กบนพื้น
+	_prop_cylinder(o + Vector3(-0.5, 0.05,  0.3), 0.05, 0.10, Color(0.38, 0.35, 0.32))
+	_prop_cylinder(o + Vector3(-0.3, 0.05,  0.5), 0.05, 0.10, Color(0.38, 0.35, 0.32))
+	# รอยมือบนกำแพงเหนือ (north wall dz ≈ -4.3)
+	_prop_box(o + Vector3(-0.4, 1.1, -4.3), Vector3(0.28, 0.32, 0.03), Color(0.18, 0.10, 0.08))
+	_prop_box(o + Vector3( 0.3, 0.9, -4.3), Vector3(0.25, 0.28, 0.03), Color(0.18, 0.10, 0.08))
+	_room_light(o + Vector3(0, 2.5, 0), Color(0.80, 0.20, 0.10), 0.3, 6.0)
+
+# Room 3 — ห้องสำนักงาน | Clue 3: หนังสือเวียนยกเลิกโครงการ
+func _decorate_room3() -> void:
+	var o := _room_pos(22, 10)
+	# โต๊ะทำงาน
+	_prop_box(o + Vector3(0.0, 0.38, 0.0), Vector3(1.4, 0.06, 0.8), Color(0.28, 0.20, 0.13))
+	for dxv in [-0.6, 0.6]:
+		for dzv in [-0.35, 0.35]:
+			_prop_box(o + Vector3(dxv, 0.19, dzv), Vector3(0.07, 0.38, 0.07), Color(0.23, 0.17, 0.10))
+	# เก้าอี้นายจ้าง (หันหลัง — back faces player)
+	_prop_box(o + Vector3(0.0, 0.24, -0.85), Vector3(0.50, 0.06, 0.45), Color(0.18, 0.13, 0.09))
+	_prop_box(o + Vector3(0.0, 0.55, -1.05), Vector3(0.50, 0.50, 0.06), Color(0.18, 0.13, 0.09))
+	# ลิ้นชักเปิดค้าง
+	_prop_box(o + Vector3(-0.5, 0.18, 0.55), Vector3(0.35, 0.14, 0.40), Color(0.26, 0.19, 0.12))
+	_prop_box(o + Vector3( 0.4, 0.08, 0.55), Vector3(0.35, 0.14, 0.40), Color(0.26, 0.19, 0.12))
+	# เอกสารกระจายบนพื้น
+	_prop_box(o + Vector3( 0.3, 0.01, 0.9), Vector3(0.30, 0.02, 0.40), Color(0.80, 0.76, 0.68))
+	_prop_box(o + Vector3(-0.2, 0.01, 1.0), Vector3(0.35, 0.02, 0.45), Color(0.78, 0.74, 0.66))
+	_prop_box(o + Vector3( 0.6, 0.01, 0.6), Vector3(0.28, 0.02, 0.38), Color(0.82, 0.78, 0.70))
+	# เอกสารบนโต๊ะ
+	_prop_box(o + Vector3(-0.2, 0.42, 0.0), Vector3(0.30, 0.02, 0.40), Color(0.85, 0.80, 0.72))
+	_room_light(o + Vector3(0, 2.5, 0), Color(0.80, 0.85, 1.00), 0.45, 8.0)
+
+# Room 4 — ห้องซ่อนตัว | Clue 4: บันทึกศุภกร วันที่ 3
+func _decorate_room4() -> void:
+	var o := _room_pos(2, 16)
+	# กองกล่องกั้นทางเข้าฝั่งใต้ (south side dz ≈ +4.0)
+	_prop_box(o + Vector3(-0.6, 0.22, 4.0),  Vector3(0.50, 0.44, 0.50), Color(0.35, 0.28, 0.18))
+	_prop_box(o + Vector3( 0.1, 0.22, 4.0),  Vector3(0.45, 0.44, 0.48), Color(0.32, 0.25, 0.17))
+	_prop_box(o + Vector3(-0.25, 0.60, 4.0), Vector3(0.48, 0.32, 0.45), Color(0.38, 0.30, 0.20))
+	_prop_box(o + Vector3( 0.6, 0.55, 3.9),  Vector3(0.40, 0.50, 0.06), Color(0.28, 0.20, 0.14))
+	_prop_box(o + Vector3( 0.6, 0.12, 3.65), Vector3(0.40, 0.06, 0.42), Color(0.28, 0.20, 0.14))
+	# รอยขูดนับวัน บนกำแพงตะวันตก (west wall dx ≈ -4.3)
+	_prop_box(o + Vector3(-4.3, 1.10, -0.2), Vector3(0.03, 0.50, 0.65), Color(0.50, 0.46, 0.42))
+	# ภาพถ่ายคนงาน บนกำแพงตะวันตก
+	_prop_box(o + Vector3(-4.3, 1.50,  0.5), Vector3(0.03, 0.28, 0.36), Color(0.72, 0.68, 0.60))
+	# ผ้าห่มมุมห้อง
+	_prop_box(o + Vector3(-0.8, 0.05, -0.7), Vector3(0.70, 0.10, 0.50), Color(0.38, 0.30, 0.22))
+	_room_light(o + Vector3(0, 2.5, 0), Color(0.70, 0.60, 0.45), 0.2, 5.0)
+
+# Room 5 — ห้องที่นวลตาย | Clue 5: หน้าสุดท้ายของสมุดศุภกร (twist)
+func _decorate_room5() -> void:
+	var o := _room_pos(25, 17)
+	# เทียน 3 เล่มในรูปสามเหลี่ยม
+	var candle_offsets := [
+		Vector3( 0.00, 0.0, -0.60),
+		Vector3(-0.52, 0.0,  0.30),
+		Vector3( 0.52, 0.0,  0.30),
+	]
+	for co in candle_offsets:
+		_prop_cylinder(o + co + Vector3(0, 0.07, 0), 0.04, 0.14, Color(0.88, 0.84, 0.76))
+		_room_light(o + co + Vector3(0, 0.22, 0), Color(1.0, 0.65, 0.25), 0.45, 2.5)
+	# วงกลมบนพื้น (flat dark disk)
+	_prop_cylinder(o + Vector3(0, 0.008, 0), 0.62, 0.016, Color(0.10, 0.07, 0.06))
+	# บัตรประจำตัวนวล วางกลางวงกลม
+	_prop_box(o + Vector3(0, 0.012, 0), Vector3(0.18, 0.02, 0.12), Color(0.78, 0.75, 0.68))
+	# แสงเขียวซีด
+	_room_light(o + Vector3(0, 2.5, 0), Color(0.30, 0.65, 0.35), 0.25, 7.0)
 
 func _mat(c: Color) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
