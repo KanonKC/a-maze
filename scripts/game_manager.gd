@@ -18,6 +18,9 @@ var _end_screen: CanvasLayer
 var _pause_layer: CanvasLayer
 var _debug_layer: CanvasLayer
 
+var _ambient_player: AudioStreamPlayer
+var _sfx_player: AudioStreamPlayer
+
 @onready var player: CharacterBody3D = $World/Player
 @onready var hud = $HUD
 
@@ -32,6 +35,29 @@ func _ready() -> void:
 	_build_pause_menu()
 	_build_debug_overlay()
 	_build_post_process()
+	_build_audio()
+
+func _build_audio() -> void:
+	# Ambient horror loop — plays throughout the game
+	_ambient_player = AudioStreamPlayer.new()
+	_ambient_player.stream = load("res://assets/sounds/ambient_horror.ogg")
+	_ambient_player.volume_db = -14.0
+	_ambient_player.autoplay = true
+	var amb_stream := _ambient_player.stream as AudioStreamOggVorbis
+	if amb_stream:
+		amb_stream.loop = true
+	add_child(_ambient_player)
+	_ambient_player.play()
+
+	# One-shot SFX player for events
+	_sfx_player = AudioStreamPlayer.new()
+	_sfx_player.volume_db = -6.0
+	add_child(_sfx_player)
+
+func _play_sfx(path: String) -> void:
+	if _sfx_player:
+		_sfx_player.stream = load(path)
+		_sfx_player.play()
 
 func _build_post_process() -> void:
 	var pp = load("res://scripts/post_process.gd").new()
@@ -39,7 +65,7 @@ func _build_post_process() -> void:
 
 func _build_pause_menu() -> void:
 	_pause_layer = CanvasLayer.new()
-	_pause_layer.layer = 20
+	_pause_layer.layer = 60  # above post-process (layer 50)
 	_pause_layer.process_mode = Node.PROCESS_MODE_ALWAYS
 	add_child(_pause_layer)
 
@@ -93,10 +119,10 @@ func _build_debug_overlay() -> void:
 	if not DebugConfig.DEBUG:
 		return
 	_debug_layer = CanvasLayer.new()
-	_debug_layer.layer = 18
+	_debug_layer.layer = 65  # above post-process (50)
 	_debug_layer.process_mode = Node.PROCESS_MODE_ALWAYS
 	add_child(_debug_layer)
-	var overlay := load("res://scripts/debug_overlay.gd").new()
+	var overlay: Node = load("res://scripts/debug_overlay.gd").new()
 	_debug_layer.add_child(overlay)
 	_debug_layer.visible = false
 
@@ -127,6 +153,7 @@ func collect_clue(text: String = "") -> void:
 	emit_signal("clue_collected", clues_found, CLUES_TOTAL)
 	if text != "":
 		emit_signal("clue_text_revealed", text)
+	_play_sfx("res://assets/sounds/clue_pickup.wav")
 	var ghost = get_tree().get_first_node_in_group("ghost")
 	if ghost and ghost.has_method("increase_speed"):
 		ghost.increase_speed()
@@ -151,6 +178,7 @@ func _trigger_world_event(clue_count: int) -> void:
 			_lights_out_event(3.0)
 		5:
 			# Clue 5: exit unlocked — handled by exit_unlocked signal, no extra event
+			pass
 
 func _flash_flicker_event() -> void:
 	# Temporarily spike danger level to trigger flashlight flicker in player.gd
@@ -182,6 +210,7 @@ func _lights_out_event(duration: float) -> void:
 	var env: Environment = env_node.environment
 	var original_energy := env.ambient_light_energy
 	env.ambient_light_energy = 0.0
+	_play_sfx("res://assets/sounds/lights_out_sting.wav")
 	if player and player.has_method("set_danger_level"):
 		player.set_danger_level(0.8)
 	await get_tree().create_timer(duration).timeout
@@ -192,6 +221,7 @@ func set_checkpoint(pos: Vector3) -> void:
 
 func on_player_caught() -> void:
 	emit_signal("player_caught")
+	_play_sfx("res://assets/sounds/player_caught.wav")
 	await get_tree().create_timer(1.5).timeout
 	player.global_position = checkpoint_position
 	player.velocity = Vector3.ZERO
@@ -199,3 +229,4 @@ func on_player_caught() -> void:
 func on_player_exit() -> void:
 	if exit_open:
 		emit_signal("game_won")
+		_play_sfx("res://assets/sounds/jingle_win.wav")

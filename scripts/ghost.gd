@@ -69,7 +69,7 @@ func is_frozen() -> bool:
 	return _player_is_watching() and not _player_flashlight_active()
 
 func _player_flashlight_active() -> bool:
-	var on := player.get_flashlight_on()
+	var on: bool = player.get_flashlight_on()
 	return on
 
 func _sample_player_behavior(delta: float) -> void:
@@ -79,7 +79,7 @@ func _sample_player_behavior(delta: float) -> void:
 	_pos_sample_timer = 1.0   # sample every second
 
 	# Count flashlight toggles by comparing previous state
-	var fl_now := player.get_flashlight_on()
+	var fl_now: bool = player.get_flashlight_on()
 	if fl_now != _last_flashlight_state:
 		_flashlight_uses += 1
 		_last_flashlight_state = fl_now

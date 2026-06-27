@@ -25,6 +25,10 @@ var is_crouching := false
 var _step_timer  := 0.0
 var _danger_level := 0.0   # 0 = safe, 1 = ghost very close (set by ghost AI)
 
+var _flicker_timer    := 0.0
+var _flicker_active   := false
+var _flicker_duration := 0.0
+
 var _mirror_viewport: SubViewport
 var _mirror_cam: Camera3D
 var _mirror_active := false
@@ -46,6 +50,12 @@ signal danger_changed(level: float)
 func _ready() -> void:
 	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
 	flashlight.visible = false
+	step_audio.stream = load("res://assets/sounds/footstep_walk.wav")
+	step_audio.pitch_scale = 1.0
+	var fl_audio := $FlashlightAudio as AudioStreamPlayer3D
+	if fl_audio:
+		fl_audio.stream = load("res://assets/sounds/flashlight_click.wav")
+		fl_audio.volume_db = -8.0
 	_setup_mirror()
 	_setup_hum()
 
@@ -68,6 +78,13 @@ func _setup_mirror() -> void:
 
 	_mirror_cam = Camera3D.new()
 	_mirror_viewport.add_child(_mirror_cam)
+
+	# Ambient light so mirror isn't pitch-black in dark areas
+	var mirror_light := OmniLight3D.new()
+	mirror_light.light_energy = 0.6
+	mirror_light.omni_range = 8.0
+	mirror_light.light_color = Color(0.85, 0.82, 0.75)
+	_mirror_cam.add_child(mirror_light)
 
 # ── Input ──────────────────────────────────────────────────
 func _input(event: InputEvent) -> void:
@@ -107,9 +124,11 @@ func _push_hum_samples() -> void:
 		return
 	var frames := playback.get_frames_available()
 	var freq: float = lerp(40.0, 120.0, _danger_level)
+	# Volume rises with danger; silent when completely safe
+	var vol: float  = lerp(0.0, 0.22, _danger_level)
 	for i in frames:
 		_hum_phase += freq / 22050.0 * TAU
-		playback.push_frame(Vector2.ONE * sin(_hum_phase) * 0.15)
+		playback.push_frame(Vector2.ONE * sin(_hum_phase) * vol)
 
 func _handle_movement(delta: float) -> void:
 	if not is_on_floor():
@@ -130,19 +149,44 @@ func _handle_crouch(delta: float) -> void:
 	var target_h := CROUCH_H if is_crouching else STAND_H
 	var shape := col_shape.shape as CapsuleShape3D
 	shape.height = lerp(shape.height, target_h, CROUCH_LERP * delta)
-	camera_mount.position.y = shape.height * 0.45
+	# Camera eye = shape center (0.9) + half shape height - small headroom margin
+	camera_mount.position.y = col_shape.position.y + shape.height * 0.5 - 0.2
 
 func _handle_flashlight(delta: float) -> void:
 	if flashlight_on and flashlight_energy > 0:
 		flashlight_energy -= FL_DRAIN * delta
 		flashlight_energy = maxf(flashlight_energy, 0.0)
-		flashlight.light_energy = flashlight_energy * 3.0
 		if flashlight_energy <= FL_MIN:
 			_toggle_flashlight()
+			return
+		_update_flashlight_flicker(delta)
+
+func _update_flashlight_flicker(delta: float) -> void:
+	_flicker_timer -= delta
+	if _flicker_active:
+		_flicker_duration -= delta
+		flashlight.light_energy = flashlight_energy * 3.0 * randf_range(0.05, 0.35)
+		if _flicker_duration <= 0.0:
+			_flicker_active = false
+			flashlight.light_energy = flashlight_energy * 3.0
+			_flicker_timer = randf_range(0.8, 2.5) * (1.0 - _danger_level * 0.6)
+	else:
+		flashlight.light_energy = flashlight_energy * 3.0
+		if _flicker_timer <= 0.0 and _danger_level > 0.35 and _clues_found() >= 1:
+			_flicker_active   = true
+			_flicker_duration = randf_range(0.04, 0.12)
+			_flicker_timer    = 0.0
+
+func _clues_found() -> int:
+	var gm := get_tree().get_first_node_in_group("game_manager")
+	return gm.clues_found if gm else 0
 
 func _toggle_flashlight() -> void:
 	flashlight_on = !flashlight_on
 	flashlight.visible = flashlight_on and flashlight_energy > FL_MIN
+	var fl_audio := $FlashlightAudio as AudioStreamPlayer3D
+	if fl_audio:
+		fl_audio.play()
 
 func _handle_footsteps(delta: float) -> void:
 	if is_on_floor() and velocity.length() > 0.5:
@@ -151,6 +195,10 @@ func _handle_footsteps(delta: float) -> void:
 			_step_timer = 0.55 if is_crouching else 0.4
 			if step_audio and step_audio.stream:
 				step_audio.play()
+	else:
+		if step_audio and step_audio.playing:
+			step_audio.stop()
+		_step_timer = 0.0
 
 func _try_place_chalk() -> void:
 	if not has_chalk or chalk_uses <= 0:

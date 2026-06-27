@@ -1,7 +1,8 @@
 extends Node3D
 
 # ─── Exit light (class var for signal callback) ───────────
-var _exit_light: OmniLight3D
+var _exit_light:   OmniLight3D
+var _exit_blocker: StaticBody3D
 
 @onready var _world_env: WorldEnvironment = $WorldEnvironment
 
@@ -37,6 +38,8 @@ var _wall_nodes: Dictionary = {}
 
 # Cells that must never shift: room cells and chalk-marked cells
 var _locked_cells: Dictionary = {}   # key "x,y" → true
+
+var _wall_shift_audio: AudioStreamPlayer
 
 # World-space offset so maze is centered at origin
 var ox: float
@@ -85,6 +88,7 @@ func _ready() -> void:
 		_world_env.environment.fog_enabled = true
 		_world_env.environment.fog_density = 0.02
 		_world_env.environment.fog_light_color = Color(0.05, 0.03, 0.08)
+		_world_env.environment.ambient_light_energy = 0.25  # slight base visibility without flashlight
 
 	# Connect exit_unlocked signal from game_manager
 	var gm = get_tree().get_first_node_in_group("game_manager")
@@ -96,6 +100,15 @@ func _ready() -> void:
 
 	# 7. Spawn ghost in outer zone, far from player start
 	_spawn_ghost()
+
+	# Wall shift audio
+	_wall_shift_audio = AudioStreamPlayer.new()
+	var ws_stream := load("res://assets/sounds/wall_shift.wav") as AudioStreamWAV
+	if ws_stream:
+		ws_stream.loop_mode = AudioStreamWAV.LOOP_DISABLED
+	_wall_shift_audio.stream = ws_stream
+	_wall_shift_audio.volume_db = -4.0
+	add_child(_wall_shift_audio)
 
 func _cell_center(col: int, row: int) -> Vector3:
 	return Vector3(ox + col * STEP + CELL * 0.5, 1.0, oz + row * STEP + CELL * 0.5)
@@ -128,6 +141,10 @@ func _spawn_items() -> void:
 	# ── กระจก ───────────────────────────────────────────────
 	# ตำแหน่งจริง: Room 3 (col=21, row=9) ชั้นกลาง
 	_make_pickup(_cell_center(22, 10), 1, pickup_script)  # mirror in room 3
+
+	# ── ถ่านไฟฉาย ───────────────────────────────────────────
+	_make_pickup(_cell_center(6, 5),  2, pickup_script)   # battery outer zone NW
+	_make_pickup(_cell_center(26, 18), 2, pickup_script)  # battery outer zone SE
 
 	# ── DEV: วางใกล้ start ให้ทดสอบได้เลย ──────────────────
 	_make_pickup(_cell_center(14, 11), 0, pickup_script)  # chalk ซ้าย start
@@ -202,6 +219,10 @@ func _spawn_ghost() -> void:
 	light.light_energy = 1.2
 	light.omni_range  = 4.0
 	ghost.add_child(light)
+
+	# Load SFX
+	ghost.ambient_sfx = load("res://assets/sounds/ghost_breath.wav")
+	ghost.aggro_sfx   = load("res://assets/sounds/ghost_aggro.wav")
 
 	# Start far from player (top-right outer zone)
 	ghost.position = _cell_center(28, 3)
@@ -372,7 +393,7 @@ func _build_geometry() -> void:
 					Vector3(WALL_T, WALL_H, CELL),
 					wall_mat
 				)
-				ew.visible = not (grid[_idx(x, y)] & DE)
+				_set_wall_active(ew, not bool(grid[_idx(x, y)] & DE))
 				_wall_nodes["%d,%d,E" % [x, y]] = ew
 
 			# South wall — always create node, show/hide based on grid bitmask
@@ -382,7 +403,7 @@ func _build_geometry() -> void:
 					Vector3(CELL, WALL_H, WALL_T),
 					wall_mat
 				)
-				sw.visible = not (grid[_idx(x, y)] & DS)
+				_set_wall_active(sw, not bool(grid[_idx(x, y)] & DS))
 				_wall_nodes["%d,%d,S" % [x, y]] = sw
 
 			# Pillar at SE corner (always fill corner)
@@ -395,6 +416,16 @@ func _build_geometry() -> void:
 
 	# Exit trigger area (Area3D just outside east wall)
 	_place_exit_trigger(east_x + 1.5, exit_z0 + STEP * 0.5)
+
+	# Blocker fills the exit gap until clues are collected
+	_exit_blocker = StaticBody3D.new()
+	_exit_blocker.position = Vector3(east_x, WALL_H * 0.5, exit_z0 + STEP * 0.5)
+	var _eb_cs := CollisionShape3D.new()
+	var _eb_shape := BoxShape3D.new()
+	_eb_shape.size = Vector3(WALL_T * 2, WALL_H, STEP)
+	_eb_cs.shape = _eb_shape
+	_exit_blocker.add_child(_eb_cs)
+	add_child(_exit_blocker)
 
 ## ─── Maze-shift timers (zone-based) ──────────────────────
 ## Inner (zone 0) = never changes
@@ -483,6 +514,8 @@ func lock_cell_at(world_pos: Vector3) -> void:
 func _on_exit_unlocked() -> void:
 	if _exit_light:
 		_exit_light.light_color = Color(0.2, 1.0, 0.4)
+	if _exit_blocker:
+		_exit_blocker.collision_layer = 0  # remove physical barrier
 
 func _place_exit_trigger(x: float, z: float) -> void:
 	var area := Area3D.new()
@@ -570,6 +603,10 @@ func _box(pos: Vector3, size: Vector3, mat: StandardMaterial3D) -> StaticBody3D:
 	add_child(body)
 	return body
 
+func _set_wall_active(node: StaticBody3D, active: bool) -> void:
+	node.visible = active
+	node.collision_layer = 1 if active else 0
+
 # Toggle a single interior wall on/off and update the grid bitmask.
 # dir_char: "E" or "S"
 func _swap_wall(x: int, y: int, dir_char: String) -> void:
@@ -578,7 +615,7 @@ func _swap_wall(x: int, y: int, dir_char: String) -> void:
 		return
 	var node: StaticBody3D = _wall_nodes[key]
 	var dir_bit := DE if dir_char == "E" else DS
-	var opp_bit := OPP[dir_bit]
+	var opp_bit: int = OPP[dir_bit]
 	var nx := x + (1 if dir_char == "E" else 0)
 	var ny := y + (1 if dir_char == "S" else 0)
 
@@ -590,4 +627,6 @@ func _swap_wall(x: int, y: int, dir_char: String) -> void:
 		# Passage exists → close it
 		grid[_idx(x, y)]   &= ~dir_bit
 		grid[_idx(nx, ny)] &= ~opp_bit
-	node.visible = not node.visible
+	_set_wall_active(node, not node.visible)
+	if _wall_shift_audio:
+		_wall_shift_audio.play()

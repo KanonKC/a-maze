@@ -6,7 +6,8 @@ var _sub:    Label
 var _btn:    Button
 
 func _ready() -> void:
-	layer = 10
+	layer = 70  # above post-process (50) and pause (60)
+	process_mode = Node.PROCESS_MODE_ALWAYS
 
 	_panel = ColorRect.new()
 	_panel.color = Color(0, 0, 0, 0.85)
@@ -34,7 +35,10 @@ func _ready() -> void:
 	_btn = Button.new()
 	_btn.text = "เล่นใหม่"
 	_btn.add_theme_font_size_override("font_size", 28)
-	_btn.pressed.connect(func(): get_tree().reload_current_scene())
+	_btn.pressed.connect(func():
+		get_tree().paused = false
+		get_tree().reload_current_scene()
+	)
 	vbox.add_child(_btn)
 
 	hide()
@@ -51,5 +55,6 @@ func show_win() -> void:
 	_title.text  = "หนีออกมาได้!"
 	_sub.text    = "คุณรอดจากเขาวงกตได้สำเร็จ"
 	_btn.visible = true
+	get_tree().paused = true
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 	show()

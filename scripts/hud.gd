@@ -27,13 +27,29 @@ const _CROSSHAIR_DIM  := Color(0.6, 0.6, 0.6, 0.5)
 const _CROSSHAIR_HOT  := Color(1.0, 0.15, 0.15, 0.95)
 
 func _ready() -> void:
+	layer = 60  # above post-process (layer 50) so shader doesn't pixelate UI
 	message_label.visible = false
 	item_notif.visible    = false
 	mirror_frame.visible  = false
 	chalk_label.text      = ""
+	_setup_mirror_frame()
 	_build_crosshair()
 	_build_crouch_label()
 	_build_clue_display()
+
+func _setup_mirror_frame() -> void:
+	# Reposition mirror to lower-center — looks like holding a hand mirror
+	mirror_frame.anchor_left   = 0.5
+	mirror_frame.anchor_right  = 0.5
+	mirror_frame.anchor_top    = 1.0
+	mirror_frame.anchor_bottom = 1.0
+	mirror_frame.offset_left   = -180
+	mirror_frame.offset_right  =  180
+	mirror_frame.offset_top    = -260
+	mirror_frame.offset_bottom = -20
+	mirror_frame.stretch_mode  = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	# Dark border to simulate mirror frame
+	mirror_frame.modulate = Color(0.85, 0.82, 0.78)
 
 func _build_clue_display() -> void:
 	_clue_display = Label.new()

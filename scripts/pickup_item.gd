@@ -1,6 +1,6 @@
 extends Area3D
 
-enum ItemType { CHALK, MIRROR }
+enum ItemType { CHALK, MIRROR, BATTERY }
 @export var item_type: ItemType = ItemType.CHALK
 
 var _base_y: float
@@ -25,4 +25,7 @@ func _on_body_entered(body: Node3D) -> void:
 		ItemType.MIRROR:
 			body.has_mirror = true
 			body.emit_signal("item_picked_up", "mirror")
+		ItemType.BATTERY:
+			body.flashlight_energy = minf(body.flashlight_energy + 0.5, 1.0)
+			body.emit_signal("item_picked_up", "battery")
 	queue_free()

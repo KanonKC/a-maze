@@ -11,6 +11,7 @@ func _ready() -> void:
 	mat.emission = Color(0.6, 0.55, 0.4)
 	mat.emission_energy_multiplier = 0.8
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	material_override = mat
 
 	# Notify maze so this cell is locked from shifting
