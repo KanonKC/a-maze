@@ -25,6 +25,7 @@ var _sfx_player: AudioStreamPlayer
 @onready var hud = $HUD
 
 func _ready() -> void:
+	add_to_group("game_manager")
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	checkpoint_position = player.global_position
 	hud.setup(player, self)

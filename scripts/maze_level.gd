@@ -90,10 +90,8 @@ func _ready() -> void:
 		_world_env.environment.fog_light_color = Color(0.05, 0.03, 0.08)
 		_world_env.environment.ambient_light_energy = 0.25  # slight base visibility without flashlight
 
-	# Connect exit_unlocked signal from game_manager
-	var gm = get_tree().get_first_node_in_group("game_manager")
-	if gm and gm.has_signal("exit_unlocked"):
-		gm.exit_unlocked.connect(_on_exit_unlocked)
+	# Connect exit_unlocked after all _ready() calls finish
+	call_deferred("_connect_exit_signal")
 
 	# 6. Spawn items
 	_spawn_items()
@@ -519,6 +517,11 @@ func _on_exit_unlocked() -> void:
 		_exit_light.light_color = Color(0.2, 1.0, 0.4)
 	if _exit_blocker:
 		_exit_blocker.collision_layer = 0  # remove physical barrier
+
+func _connect_exit_signal() -> void:
+	var gm = get_tree().get_first_node_in_group("game_manager")
+	if gm and gm.has_signal("exit_unlocked"):
+		gm.exit_unlocked.connect(_on_exit_unlocked)
 
 func _place_exit_trigger(x: float, z: float) -> void:
 	var area := Area3D.new()

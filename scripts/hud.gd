@@ -16,6 +16,10 @@ var _mirror_texture_set := false
 
 var _clue_display: Label
 var _clue_tween: Tween
+var _clue_dismiss_hint: Label
+var _clue_showing := false
+var _clue_hold_time := 0.0
+const CLUE_HOLD_DISMISS := 2.5
 
 # Crosshair nodes created in code
 var _crosshair_h: ColorRect
@@ -36,6 +40,7 @@ func _ready() -> void:
 	_build_crosshair()
 	_build_crouch_label()
 	_build_clue_display()
+	_build_clue_dismiss_hint()
 
 func _setup_mirror_frame() -> void:
 	# Reposition mirror to lower-center — looks like holding a hand mirror
@@ -55,12 +60,12 @@ func _build_clue_display() -> void:
 	_clue_display = Label.new()
 	_clue_display.anchor_left   = 0.5
 	_clue_display.anchor_right  = 0.5
-	_clue_display.anchor_top    = 0.65
-	_clue_display.anchor_bottom = 0.65
+	_clue_display.anchor_top    = 0.18
+	_clue_display.anchor_bottom = 0.18
 	_clue_display.offset_left   = -320
 	_clue_display.offset_right  =  320
 	_clue_display.offset_top    = 0
-	_clue_display.offset_bottom = 160
+	_clue_display.offset_bottom = 200
 	_clue_display.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_clue_display.vertical_alignment   = VERTICAL_ALIGNMENT_TOP
 	_clue_display.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -69,6 +74,24 @@ func _build_clue_display() -> void:
 	_clue_display.modulate.a = 0.0
 	_clue_display.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_clue_display)
+
+func _build_clue_dismiss_hint() -> void:
+	_clue_dismiss_hint = Label.new()
+	_clue_dismiss_hint.text = "กดค้าง [Space] เพื่อปิด"
+	_clue_dismiss_hint.add_theme_font_size_override("font_size", 13)
+	_clue_dismiss_hint.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 0.7))
+	_clue_dismiss_hint.anchor_left   = 0.5
+	_clue_dismiss_hint.anchor_right  = 0.5
+	_clue_dismiss_hint.anchor_top    = 0.18
+	_clue_dismiss_hint.anchor_bottom = 0.18
+	_clue_dismiss_hint.offset_left   = -160
+	_clue_dismiss_hint.offset_right  =  160
+	_clue_dismiss_hint.offset_top    = 210
+	_clue_dismiss_hint.offset_bottom = 235
+	_clue_dismiss_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_clue_dismiss_hint.modulate.a = 0.0
+	_clue_dismiss_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_clue_dismiss_hint)
 
 func _build_crouch_label() -> void:
 	_crouch_label = Label.new()
@@ -173,6 +196,18 @@ func _process(delta: float) -> void:
 		_crosshair_h.color = col
 		_crosshair_v.color = col
 
+	# Clue dismiss — hold Space
+	if _clue_showing:
+		if Input.is_action_pressed("ui_accept"):
+			_clue_hold_time += delta
+			var progress := _clue_hold_time / CLUE_HOLD_DISMISS
+			_clue_dismiss_hint.text = "กดค้าง [Space] เพื่อปิด [%d%%]" % int(progress * 100)
+			if _clue_hold_time >= CLUE_HOLD_DISMISS:
+				_dismiss_clue_text()
+		else:
+			_clue_hold_time = 0.0
+			_clue_dismiss_hint.text = "กดค้าง [Space] เพื่อปิด"
+
 	# Chalk
 	if player.has_chalk:
 		chalk_label.text = "ชอล์ก: %d" % player.chalk_uses
@@ -187,12 +222,22 @@ func _show_clue_text(text: String) -> void:
 	if not _clue_display:
 		return
 	_clue_display.text = text
+	_clue_hold_time = 0.0
+	_clue_showing = true
 	if _clue_tween and _clue_tween.is_valid():
 		_clue_tween.kill()
 	_clue_tween = create_tween()
 	_clue_tween.tween_property(_clue_display, "modulate:a", 1.0, 0.8)
-	_clue_tween.tween_interval(5.0)
-	_clue_tween.tween_property(_clue_display, "modulate:a", 0.0, 1.2)
+	_clue_tween.tween_property(_clue_dismiss_hint, "modulate:a", 0.7, 0.8)
+
+func _dismiss_clue_text() -> void:
+	_clue_showing = false
+	_clue_hold_time = 0.0
+	if _clue_tween and _clue_tween.is_valid():
+		_clue_tween.kill()
+	_clue_tween = create_tween()
+	_clue_tween.tween_property(_clue_display, "modulate:a", 0.0, 0.4)
+	_clue_tween.tween_property(_clue_dismiss_hint, "modulate:a", 0.0, 0.4)
 
 func setup(p: CharacterBody3D, gm: Node) -> void:
 	player = p

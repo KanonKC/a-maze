@@ -21,6 +21,7 @@ var chalk_uses := 15
 var has_mirror := false
 
 # ── Internal ───────────────────────────────────────────────
+var noclip := false
 var is_crouching := false
 var _step_timer  := 0.0
 var _danger_level := 0.0   # 0 = safe, 1 = ghost very close (set by ghost AI)
@@ -94,6 +95,9 @@ func _input(event: InputEvent) -> void:
 		camera_mount.rotation.x = clamp(camera_mount.rotation.x, deg_to_rad(-80), deg_to_rad(80))
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("noclip"):
+		noclip = !noclip
+		col_shape.disabled = noclip
 	if event.is_action_pressed("toggle_flashlight"):
 		_toggle_flashlight()
 	if event.is_action_pressed("use_chalk"):
@@ -131,6 +135,13 @@ func _push_hum_samples() -> void:
 		playback.push_frame(Vector2.ONE * sin(_hum_phase) * vol)
 
 func _handle_movement(delta: float) -> void:
+	if noclip:
+		var speed := WALK_SPEED * 3.0
+		var input := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
+		var dir := (camera.global_transform.basis * Vector3(input.x, 0, input.y)).normalized()
+		global_position += dir * speed * delta
+		velocity = Vector3.ZERO
+		return
 	if not is_on_floor():
 		velocity.y -= GRAVITY * delta
 	var speed := CROUCH_SPEED if is_crouching else WALK_SPEED
